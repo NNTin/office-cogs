@@ -37,6 +37,8 @@ class FakeBot:
         self.user = FakeUser()
         self._guilds: dict[int, FakeGuild] = {}
         self._cogs: dict[str, Any] = {}
+        self.unload_extension_calls: list[str] = []
+        self.unload_extension_failures: set[str] = set()
 
     def register_guild(self, guild: FakeGuild) -> None:
         self._guilds[guild.id] = guild
@@ -49,6 +51,11 @@ class FakeBot:
 
     def get_cog(self, name: str) -> Any:
         return self._cogs.get(name)
+
+    async def unload_extension(self, name: str) -> None:
+        self.unload_extension_calls.append(name)
+        if name in self.unload_extension_failures:
+            raise RuntimeError(f"simulated failure unloading {name!r}")
 
 
 class FakeContext:

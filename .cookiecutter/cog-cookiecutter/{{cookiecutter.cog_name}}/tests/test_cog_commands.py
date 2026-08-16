@@ -85,3 +85,27 @@ class TestCogLoadAutoLoadsCorridor(unittest.IsolatedAsyncioTestCase):
             await {{ cookiecutter.cog_name.replace('-', '_').split('_') | map('capitalize') | join }}(bot=bot).cog_load()
 
         self.assertEqual(bot.load_extension_calls, [])
+
+
+class TestDependentRegistration(unittest.IsolatedAsyncioTestCase):
+    """Regression test for: unloading corridor left dependent cogs like this
+    one running with a stale corridor reference instead of also being
+    unloaded. cog_load/cog_unload must keep corridor's dependent registry in
+    sync so corridor's own cog_unload can cascade correctly."""
+
+    async def test_cog_load_registers_with_corridor(self) -> None:
+        bot = FakeBot()
+        cog = {{ cookiecutter.cog_name.replace('-', '_').split('_') | map('capitalize') | join }}(bot=bot)
+
+        await cog.cog_load()
+
+        self.assertIn("{{cookiecutter.cog_name}}", bot.corridor.registered_dependents)
+
+    async def test_cog_unload_unregisters_from_corridor(self) -> None:
+        bot = FakeBot()
+        cog = {{ cookiecutter.cog_name.replace('-', '_').split('_') | map('capitalize') | join }}(bot=bot)
+        await cog.cog_load()
+
+        await cog.cog_unload()
+
+        self.assertNotIn("{{cookiecutter.cog_name}}", bot.corridor.registered_dependents)

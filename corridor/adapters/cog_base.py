@@ -6,6 +6,7 @@ stable contract they depend on through `required_cogs`.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import discord
@@ -16,6 +17,8 @@ from ..application import PermissionService, ReplyContent, ReplyService
 from ..domain import GuildSettings, IconPreference, PermissionGroup, ReplyMode
 from ..infrastructure import RedCorridorRepository
 from .api import BotIconResolver, BotOwnerRegistry, DiscordMemberRef, send_rendered_reply
+
+log = logging.getLogger("red.corridor")
 
 
 class CogBase:
@@ -30,12 +33,33 @@ class CogBase:
         self.config = self._repository.config
         self._permission_service = PermissionService(BotOwnerRegistry(bot))
         self._reply_service = ReplyService(BotIconResolver(bot))
+        self._dependents: set[str] = set()
 
     async def cog_load(self) -> None:
         """Extension point for start-up work."""
 
     async def cog_unload(self) -> None:
-        """Extension point for teardown work."""
+        """Cascade-unload every cog that registered itself as depending on
+        corridor -- otherwise they'd keep running with a stale/missing
+        corridor reference instead of failing loudly."""
+
+        dependents, self._dependents = self._dependents, set()
+        for extension_name in dependents:
+            try:
+                await self.bot.unload_extension(extension_name)
+            except Exception:
+                log.exception("Failed to cascade-unload dependent cog %r", extension_name)
+
+    # --- dependent-cog registration, used by dependency_loader.py -------------
+
+    def register_dependent(self, extension_name: str) -> None:
+        """Track a cog that depends on corridor, so unloading corridor
+        cascades to unload it too instead of leaving it silently broken."""
+
+        self._dependents.add(extension_name)
+
+    def unregister_dependent(self, extension_name: str) -> None:
+        self._dependents.discard(extension_name)
 
     # --- public cross-cog API -------------------------------------------------
 
