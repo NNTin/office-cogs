@@ -207,6 +207,9 @@ def _install_discord() -> None:
 
 
 def _install_redbot() -> None:
+    class _FakeCogLoadError(RuntimeError):
+        pass
+
     class _FakeConfigValue:
         def __init__(self, data: dict[str, Any], key: str) -> None:
             self._data = data
@@ -313,7 +316,13 @@ def _install_redbot() -> None:
         return module
 
     redbot = _make_stub_module("redbot")
-    redbot_core = _make_stub_module("redbot.core", Config=_FakeConfig, commands=_FakeCommands())
+    redbot_core_errors = _make_stub_module("redbot.core.errors", CogLoadError=_FakeCogLoadError)
+    redbot_core = _make_stub_module(
+        "redbot.core",
+        Config=_FakeConfig,
+        commands=_FakeCommands(),
+        errors=redbot_core_errors,
+    )
     redbot_core_bot = _make_stub_module("redbot.core.bot", Red=object)
     redbot_core_utils = _make_stub_module(
         "redbot.core.utils",
@@ -322,5 +331,6 @@ def _install_redbot() -> None:
 
     sys.modules["redbot"] = redbot
     sys.modules["redbot.core"] = redbot_core
+    sys.modules["redbot.core.errors"] = redbot_core_errors
     sys.modules["redbot.core.bot"] = redbot_core_bot
     sys.modules["redbot.core.utils"] = redbot_core_utils

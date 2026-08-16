@@ -6,8 +6,11 @@ from __future__ import annotations
 
 import unittest
 
+from redbot.core.errors import CogLoadError
+
 from corridor.domain import PermissionGroup
 
+from .. import setup
 from ..{{cookiecutter.cog_name}} import {{ cookiecutter.cog_name.replace('-', '_').split('_') | map('capitalize') | join }}
 from .conftest import FakeBot, FakeContext, FakeCorridor
 
@@ -45,3 +48,40 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
         await self.cog.bump.callback(self.cog, self.ctx)
 
         self.assertEqual(self.bot.corridor.replies, [])
+
+
+class TestCogLoadAutoLoadsCorridor(unittest.IsolatedAsyncioTestCase):
+    """required_cogs in info.json only tells Downloader what to install --
+    Red does not auto-load a dependency at runtime just because it's
+    declared there. Regression test for: unload corridor, then load this
+    cog -> it must pull corridor back in instead of failing to load."""
+
+    async def test_cog_load_loads_corridor_when_not_already_loaded(self) -> None:
+        bot = FakeBot(preloaded=False)
+        cog = {{ cookiecutter.cog_name.replace('-', '_').split('_') | map('capitalize') | join }}(bot=bot)
+        self.assertIsNone(bot.get_cog("Corridor"))
+
+        await cog.cog_load()
+
+        self.assertEqual(bot._cog_mgr.find_cog_calls, ["corridor"])
+        self.assertEqual(bot.load_extension_calls, ["corridor"])
+        self.assertEqual(bot.loaded_packages, ["corridor"])
+        self.assertIsNotNone(cog._corridor)
+
+    async def test_package_setup_loads_corridor_before_adding_the_cog(self) -> None:
+        bot = FakeBot(preloaded=False)
+
+        await setup(bot)
+
+        self.assertEqual(bot.load_extension_calls, ["corridor"])
+        self.assertEqual(bot.loaded_packages, ["corridor"])
+        self.assertEqual(len(bot.add_cog_calls), 1)
+        self.assertIs(bot.add_cog_calls[0]._corridor, bot.corridor)
+
+    async def test_missing_corridor_reports_a_user_facing_load_error(self) -> None:
+        bot = FakeBot(preloaded=False, corridor_installable=False)
+
+        with self.assertRaisesRegex(CogLoadError, "not installed"):
+            await {{ cookiecutter.cog_name.replace('-', '_').split('_') | map('capitalize') | join }}(bot=bot).cog_load()
+
+        self.assertEqual(bot.load_extension_calls, [])

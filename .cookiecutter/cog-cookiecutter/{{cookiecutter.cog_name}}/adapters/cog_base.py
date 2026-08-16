@@ -7,6 +7,7 @@ from typing import Any
 from redbot.core.bot import Red
 
 from ..application import CounterService
+from ..dependency_loader import ensure_corridor_loaded
 from ..infrastructure import RedCounterRepository
 
 
@@ -26,16 +27,13 @@ class CogBase:
     async def cog_load(self) -> None:
         """Extension point for start-up work (background tasks, sessions, ...).
 
-        corridor is declared in required_cogs, so Red loads it first -- but
-        fetch defensively rather than assuming load order is guaranteed.
+        required_cogs in info.json is only a Downloader install hint -- Red
+        does not auto-load a dependency at runtime just because it's
+        declared there, so ensure_corridor_loaded() pulls corridor back in if it was
+        unloaded independently.
         """
 
-        self._corridor = self.bot.get_cog("Corridor")
-        if self._corridor is None:
-            raise RuntimeError(
-                "corridor is not loaded. It's declared in required_cogs -- "
-                "install/load it before this cog."
-            )
+        self._corridor = await ensure_corridor_loaded(self.bot)
 
     async def cog_unload(self) -> None:
         """Extension point for teardown work."""

@@ -26,6 +26,11 @@ else:
 
 
 async def setup(bot: Red) -> None:
+    # Corridor must be loaded before importing this Cog: its adapters import
+    # Corridor's public domain API at module scope.
+    from .dependency_loader import ensure_corridor_loaded
+
+    await ensure_corridor_loaded(bot)
     from .{{cookiecutter.cog_name}} import {{ cookiecutter.cog_name.replace('-', '_').split('_') | map('capitalize') | join }}
 
     await bot.add_cog({{ cookiecutter.cog_name.replace('-', '_').split('_') | map('capitalize') | join }}(bot))

@@ -4,6 +4,7 @@ the fake Discord-facing objects tests construct directly."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 
@@ -50,11 +51,54 @@ class FakeCorridor:
         return self.allow_permission
 
 
+@dataclass(frozen=True)
+class FakeModuleSpec:
+    name: str
+
+
+class FakeCogManager:
+    def __init__(self, bot: FakeBot) -> None:
+        self.bot = bot
+        self.find_cog_calls: list[str] = []
+
+    async def find_cog(self, name: str) -> FakeModuleSpec | None:
+        self.find_cog_calls.append(name)
+        return FakeModuleSpec(name) if self.bot.corridor_installable else None
+
+
 class FakeBot:
-    def __init__(self, corridor: FakeCorridor | None = None) -> None:
-        self.corridor = corridor or FakeCorridor()
+    """`corridor=None` simulates corridor already being loaded on the bot
+    (the common case). Pass `preloaded=False` to simulate it having been
+    unloaded, exercising CogBase.cog_load()'s auto-load-via-ensure_loaded
+    path instead."""
+
+    def __init__(
+        self,
+        corridor: FakeCorridor | None = None,
+        preloaded: bool = True,
+        corridor_installable: bool = True,
+    ) -> None:
+        self._pending_corridor = corridor or FakeCorridor()
+        self.corridor: FakeCorridor | None = self._pending_corridor if preloaded else None
+        self.corridor_installable = corridor_installable
+        self._cog_mgr = FakeCogManager(self)
+        self.load_extension_calls: list[str] = []
+        self.loaded_packages: list[str] = []
+        self.add_cog_calls: list[Any] = []
 
     def get_cog(self, name: str) -> Any:
         if name == "Corridor":
             return self.corridor
         return None
+
+    async def load_extension(self, spec: FakeModuleSpec) -> None:
+        self.load_extension_calls.append(spec.name)
+        if spec.name == "corridor":
+            self.corridor = self._pending_corridor
+
+    async def add_loaded_package(self, name: str) -> None:
+        self.loaded_packages.append(name)
+
+    async def add_cog(self, cog: Any) -> None:
+        self.add_cog_calls.append(cog)
+        await cog.cog_load()
